@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RUXX STARMAP - Solar System Educational Map</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Stars Background -->
+  <div id="stars"></div>
+  <div id="stars2"></div>
+  <div id="stars3"></div>
+
+  <!-- Header & Controls -->
+  <header>
+    <div class="logo">
+      <h1>RUXX <span>STARMAP</span></h1>
+      <p id="subtitle">Interactive Solar System</p>
+    </div>
+    <div class="controls">
+      <button id="langToggle">IDN / ENG</button>
+    </div>
+  </header>
+
+  <div class="hint" id="hintText">Click a planet to learn more!</div>
+
+  <!-- Sidebar / Planet Menu -->
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+    ☰
+  </button>
+  <div class="sidebar" id="planetMenu">
+    <h3 id="menuTitle">Select Planet:</h3>
+    <button onclick="showInfo('sun')" id="btn-sun">Sun</button>
+    <button onclick="showInfo('mercury')" id="btn-mercury">Mercury</button>
+    <button onclick="showInfo('venus')" id="btn-venus">Venus</button>
+    <button onclick="showInfo('earth')" id="btn-earth">Earth</button>
+    <button onclick="showInfo('mars')" id="btn-mars">Mars</button>
+    <button onclick="showInfo('jupiter')" id="btn-jupiter">Jupiter</button>
+    <button onclick="showInfo('saturn')" id="btn-saturn">Saturn</button>
+    <button onclick="showInfo('uranus')" id="btn-uranus">Uranus</button>
+    <button onclick="showInfo('neptune')" id="btn-neptune">Neptune</button>
+  </div>
+
+  <!-- Solar System Container -->
+  <div class="solar-system">
+    <!-- Sun -->
+    <div class="sun orbit-center" onclick="showInfo('sun')" title="Sun"></div>
+
+    <!-- Mercury Orbit & Planet -->
+    <div class="orbit mercury-orbit">
+      <div class="planet mercury" onclick="event.stopPropagation(); showInfo('mercury')" title="Mercury"></div>
+    </div>
+
+    <!-- Venus Orbit & Planet -->
+    <div class="orbit venus-orbit">
+      <div class="planet venus" onclick="event.stopPropagation(); showInfo('venus')" title="Venus"></div>
+    </div>
+
+    <!-- Earth Orbit & Planet -->
+    <div class="orbit earth-orbit">
+      <div class="planet earth" onclick="event.stopPropagation(); showInfo('earth')" title="Earth">
+        <div class="moon-orbit">
+          <div class="moon"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mars Orbit & Planet -->
+    <div class="orbit mars-orbit">
+      <div class="planet mars" onclick="event.stopPropagation(); showInfo('mars')" title="Mars"></div>
+    </div>
+
+    <!-- Jupiter Orbit & Planet -->
+    <div class="orbit jupiter-orbit">
+      <div class="planet jupiter" onclick="event.stopPropagation(); showInfo('jupiter')" title="Jupiter"></div>
+    </div>
+
+    <!-- Saturn Orbit & Planet -->
+    <div class="orbit saturn-orbit">
+      <div class="planet saturn" onclick="event.stopPropagation(); showInfo('saturn')" title="Saturn">
+        <div class="saturn-rings"></div>
+      </div>
+    </div>
+
+    <!-- Uranus Orbit & Planet -->
+    <div class="orbit uranus-orbit">
+      <div class="planet uranus" onclick="event.stopPropagation(); showInfo('uranus')" title="Uranus"></div>
+    </div>
+
+    <!-- Neptune Orbit & Planet -->
+    <div class="orbit neptune-orbit">
+      <div class="planet neptune" onclick="event.stopPropagation(); showInfo('neptune')" title="Neptune"></div>
+    </div>
+  </div>
+
+  <!-- Glassmorphism Modal Panel -->
+  <div class="panel-overlay" id="infoPanel" onclick="closeInfo(event)">
+    <div class="panel-content" onclick="event.stopPropagation()">
+      <div class="panel-header">
+        <h2 id="planetName">Planet Name</h2>
+        <button class="close-btn" onclick="closeInfo(event, true)">&times;</button>
+      </div>
+      <div class="panel-body">
+        <div class="info-row">
+          <span class="info-label" id="labelType">Type:</span>
+          <span class="info-value" id="planetType">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label" id="labelDistance">Distance from Sun:</span>
+          <span class="info-value" id="planetDistance">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label" id="labelMass">Mass:</span>
+          <span class="info-value" id="planetMass">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label" id="labelTemp">Temperature:</span>
+          <span class="info-value" id="planetTemp">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label" id="labelMoons">Moons:</span>
+          <span class="info-value" id="planetMoons">-</span>
+        </div>
+        <div class="description-section">
+          <h3 id="labelDesc">Description</h3>
+          <p id="planetDesc">Loading description...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Chat Assistant -->
+  <div class="ai-chat-btn" id="aiToggleBtn" onclick="toggleAIChat()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ai-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+  </div>
+  
+  <div class="ai-chat-panel" id="aiChatPanel">
+    <div class="ai-chat-header">
+      <h3>RUXX AI <span>SYSTEM</span></h3>
+      <button onclick="toggleAIChat()">✖</button>
+    </div>
+    <div class="ai-chat-messages" id="aiMessages">
+      <div class="msg ai-msg">Initializing RUXX AI How can I assist your sector exploration today?</div>
+    </div>
+    <div class="ai-chat-input-area">
+      <input type="text" id="aiInput" placeholder="Ask AI..." onkeypress="handleAIKeypress(event)">
+      <button id="aiSendBtn" onclick="sendAIMessage()">&#10148;</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
