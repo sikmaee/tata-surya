@@ -3,99 +3,533 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RUXXI - Solar System</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Jelajah Tata Surya 3D Interaktif</title>
+    
+    <!-- Library untuk 3D (Three.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Library untuk AI Kamera (MediaPipe Hands) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Poppins', sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Tampilan UI Depan */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Biar ngga ganggu klik */
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px 50px;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid #333;
+            box-shadow: 0 0 30px rgba(0, 150, 255, 0.3);
+            transition: opacity 0.5s;
+        }
+
+        #loading h2 { margin: 0 0 10px 0; color: #00e5ff; }
+        #loading p { margin: 0; color: #ccc; font-size: 14px; }
+
+        /* Kursor Tangan */
+        #hand-cursor {
+            position: absolute;
+            width: 24px; height: 24px;
+            background: rgba(0, 229, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px #00e5ff, 0 0 40px #00e5ff;
+            transition: width 0.1s, height 0.1s, background 0.1s;
+            z-index: 100;
+            display: none;
+        }
+
+        .pinching {
+            width: 15px !important;
+            height: 15px !important;
+            background: #ff0055 !important;
+            box-shadow: 0 0 20px #ff0055 !important;
+        }
+
+        /* Panel Penjelasan Planet */
+        #info-panel {
+            position: absolute;
+            right: -500px; /* Sembunyiin di luar layar */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 400px;
+            background: rgba(10, 15, 30, 0.85);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-left: 4px solid #00e5ff;
+            padding: 40px;
+            border-radius: 20px 0 0 20px;
+            transition: right 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        }
+
+        #info-panel.active { right: 0; }
+        #info-title { font-size: 36px; margin: 0 0 10px 0; color: #fff; text-transform: uppercase; letter-spacing: 2px;}
+        #info-subtitle { font-size: 16px; color: #00e5ff; margin-top: -10px; margin-bottom: 20px; font-weight: 500;}
+        #info-desc { font-size: 16px; line-height: 1.6; color: #ddd; }
+        
+        .hint {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        #video-feed {
+            position: absolute;
+            bottom: 20px; left: 20px;
+            width: 160px; height: 120px;
+            border-radius: 10px;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror */
+            border: 2px solid rgba(255,255,255,0.2);
+            z-index: 5;
+            opacity: 0.5;
+        }
+
+    </style>
 </head>
 <body>
-    <!-- Splash Screen -->
-    <div id="splash-screen" class="splash-screen">
-        <div class="stars-bg"></div>
-        <div class="splash-content">
-            <div class="loader-ring"></div>
-            <h1 class="splash-title" data-i18n="splashTitle">MEMASUKI TATA SURYA...</h1>
+
+    <div id="canvas-container"></div>
+    <video id="video-feed" autoplay playsinline></video>
+
+    <div id="ui-layer">
+        <div id="loading">
+            <h2>Menyiapkan Alam Semesta...</h2>
+            <p>Tolong izinkan akses kamera ya biar bisa main.<br>Tenang aja, videonya gak disimpen kok!</p>
         </div>
+
+        <div id="hand-cursor"></div>
+
+        <div id="info-panel">
+            <h1 id="info-title">Planet</h1>
+            <p id="info-subtitle">Julukan</p>
+            <div id="info-desc">Penjelasan...</div>
+            <br><br>
+            <small style="color:#888;">*Cubit jarimu di layar untuk menutup panel ini</small>
+        </div>
+
+        <div class="hint" id="hint-text">Geser tanganmu (kiri/kanan) untuk memutar tata surya. Cubit (jempol & telunjuk) planet untuk detail.</div>
     </div>
 
-    <!-- Main Content -->
-    <main id="main-content" class="hidden">
-        <!-- Background Stars -->
-        <div class="twinkling-stars"></div>
-        <div class="space-dust"></div>
+    <script>
+        // ==========================================
+        // DATA PLANET (BAHASA MANUSIA)
+        // ==========================================
+        const planetData = {
+            "Matahari": {
+                subtitle: "Si Bos Tata Surya",
+                color: 0xffcc00, size: 6,
+                desc: "Ini dia pusat tata surya kita. Bayangin aja, Matahari ini tuh bola gas raksasa yang isinya ledakan hidrogen terus-menerus. Panas permukaannya nyampe 5.500 derajat Celcius, lho! Tanpa gravitasi dan cahaya dari si bos satu ini, bumi bakal cuma jadi es gelap yang melayang sendirian di luar angkasa."
+            },
+            "Merkurius": {
+                subtitle: "Kecil-kecil Cabe Rawit",
+                color: 0xa8a8a8, size: 1.2,
+                desc: "Planet paling kecil dan posisinya paling mepet sama Matahari. Anehnya nih, walaupun paling deket, dia bukan yang paling panas lho! Soalnya dia gak punya atmosfer buat 'nyimpen' panas. Kalau siang permukaannya bisa bikin besi meleleh, tapi pas malem dinginnya bisa bikin kamu beku seketika."
+            },
+            "Venus": {
+                subtitle: "Neraka Berkedok Bintang Kejora",
+                color: 0xe08f62, size: 1.8,
+                desc: "Nah, ini baru planet paling panas! Atmosfer Venus itu tebel banget dan isinya gas karbon dioksida. Akibatnya, terjadi efek rumah kaca yang super parah. Walau aslinya seram bak neraka, kalau diliat dari Bumi dia cantik banget pas fajar atau senja, makanya sering dipanggil Bintang Kejora."
+            },
+            "Bumi": {
+                subtitle: "Rumah Kita Tercinta",
+                color: 0x2b82c9, size: 1.9,
+                desc: "Satu-satunya tempat yang kita tau ada kehidupannya. Posisinya 'pas banget' (gak kepanasan, gak kedinginan) jadi air bisa ngalir dalam bentuk cair. Warnanya biru cantik karena sebagian besar permukaannya ketutup lautan. Jaga baik-baik ya, sejauh ini belum ada planet backup buat kita pindah!"
+            },
+            "Mars": {
+                subtitle: "Si Planet Merah",
+                color: 0xc1440e, size: 1.4,
+                desc: "Planet tetangga yang sering banget diomongin mau dijadiin koloni manusia masa depan. Warnanya merah karena permukaannya penuh sama debu besi (karat). Di sini ada gunung berapi tertinggi sedi-tata surya namanya Olympus Mons. Sekarang, ada beberapa robot buatan manusia yang lagi jalan-jalan neliti planet ini."
+            },
+            "Jupiter": {
+                subtitle: "Si Raksasa Gas Pelindung",
+                color: 0xd39c7e, size: 4.5,
+                desc: "Planet paling gede! Saking gedenya, semua planet lain kalau digabungin masih muat dimasukin ke dalemnya. Dia itu isinya gas, bukan batu. Coba perhatiin ada bercak merah di sana? Itu adalah badai raksasa yang gak pernah berhenti muter sejak ratusan tahun lalu. Gravitasi gedenya sering 'nangkep' komet biar gak nabrak Bumi."
+            },
+            "Saturnus": {
+                subtitle: "Raja Cincin",
+                color: 0xeaddb5, size: 3.8, hasRing: true,
+                desc: "Paling gampang dikenalin karena punya cincin yang super megah. Walau keliatan padat, cincin itu sebenarnya miliaran bongkahan es dan debu angkasa yang muterin dia. Fakta unik: Saturnus ini planet yang paling ringan lho. Kalau ada kolam air segede tata surya, dia ini bakal ngapung!"
+            },
+            "Uranus": {
+                subtitle: "Planet Es yang Pemalas",
+                color: 0x4b70dd, size: 2.5, hasRing: true,
+                desc: "Disebut pemalas karena cara dia muter (rotasi) itu nyamping, rebahan, alias miring 98 derajat! Warnanya biru pucat keren yang asalnya dari gas metana di atmosfernya. Hawanya dingin kebangetan dan masuk kategori planet es raksasa."
+            },
+            "Neptunus": {
+                subtitle: "Planet Badai Paling Ujung",
+                color: 0x274687, size: 2.4,
+                desc: "Planet yang letaknya paling jauh dari matahari (inget, Pluto udah dikeluarin dari geng planet utama). Saking jauhnya, dia gelap dan beku banget. Angin di sana kencengnya gila-gilaan, kecepatannya bisa ngalahin kecepatan pesawat jet! Birunya lebih pekat dibanding Uranus."
+            }
+        };
 
-        <!-- Header / Nav -->
-        <header>
-            <div class="logo">
-                <span class="author">RUXXI</span>
-                <span class="subtitle" data-i18n="headerSubtitle">Solar Exploration</span>
-            </div>
-            <div class="lang-toggle">
-                <button id="btn-id" class="active">ID</button>
-                <button id="btn-en">EN</button>
-            </div>
-        </header>
+        // ==========================================
+        // SETUP THREE.JS (GRAFIS 3D UHD)
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        // Kamera 3D
+        const camera3D = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera3D.position.set(0, 15, 60);
 
-        <!-- Solar System Map -->
-        <section class="solar-system">
-            <div class="sun-container clickable" id="sun-element">
-                <div class="sun"></div>
-                <span class="planet-label" data-i18n="sunLabel">Matahari</span>
-            </div>
+        // Renderer kualitas tinggi (Anti-aliasing on)
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // UHD support
+        container.appendChild(renderer.domElement);
 
-            <div class="planets-wrapper">
-                <!-- Planets will be generated via JS to easily bind data -->
-            </div>
-        </section>
+        // Pencahayaan
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); // Cahaya merata dikit
+        scene.add(ambientLight);
+        const sunLight = new THREE.PointLight(0xffffff, 2, 300); // Cahaya dari tengah (Matahari)
+        scene.add(sunLight);
 
-        <!-- Info Modal -->
-        <div id="info-modal" class="modal hidden">
-            <div class="modal-overlay"></div>
-            <div class="modal-content glass-panel">
-                <button class="close-btn">&times;</button>
-                <div class="modal-header">
-                    <div class="modal-planet-visual" id="modal-visual"></div>
-                    <h2 id="modal-title">Planet Name</h2>
-                </div>
-                <div class="modal-body">
-                    <p id="modal-desc" class="desc">Description here...</p>
-                    
-                    <div class="info-grid">
-                        <div class="info-box">
-                            <span class="info-label" data-i18n="typeLabel">Kategori</span>
-                            <strong id="modal-type">Tipe</strong>
-                        </div>
-                        <div class="info-box">
-                            <span class="info-label" data-i18n="distanceLabel">Jarak dari Matahari</span>
-                            <strong id="modal-distance">0 km</strong>
-                        </div>
-                        <div class="info-box">
-                            <span class="info-label" data-i18n="radiusLabel">Radius</span>
-                            <strong id="modal-radius">0 km</strong>
-                        </div>
-                        <div class="info-box">
-                            <span class="info-label" data-i18n="massLabel">Massa</span>
-                            <strong id="modal-mass">0 kg</strong>
-                        </div>
-                        <div class="info-box">
-                            <span class="info-label" data-i18n="gravityLabel">Gravitasi</span>
-                            <strong id="modal-gravity">0 m/s²</strong>
-                        </div>
-                        <div class="info-box">
-                            <span class="info-label" data-i18n="moonsLabel">Satelit Alami</span>
-                            <strong id="modal-moons">0</strong>
-                        </div>
-                    </div>
+        // Bikin background Bintang-bintang
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsCount = 2000;
+        const posArray = new Float32Array(starsCount * 3);
+        for(let i = 0; i < starsCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 400; // Sebar acak
+        }
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const starsMaterial = new THREE.PointsMaterial({size: 0.5, color: 0xffffff, transparent: true, opacity: 0.8});
+        const starMesh = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(starMesh);
 
-                    <div class="fun-fact">
-                        <strong data-i18n="factLabel">Fakta Menarik:</strong>
-                        <p id="modal-fact">Fun fact here...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+        // Objek untuk menampung dan memutar planet (Carousel)
+        const solarSystemGroup = new THREE.Group();
+        scene.add(solarSystemGroup);
 
-    <script src="data.js"></script>
-    <script src="script.js"></script>
+        const planets = [];
+        const planetMeshes = [];
+        const planetNames = Object.keys(planetData);
+        
+        // Bikin tekstur prosedural biar nggak perlu load gambar luar (anti error)
+        function createNoiseTexture(colorHex, isGas) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#' + colorHex.toString(16).padStart(6, '0');
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // Tambah detail dikit
+            for(let i=0; i<1000; i++) {
+                ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.1})`;
+                if(isGas) {
+                    ctx.fillRect(0, Math.random() * 512, 512, Math.random() * 10 + 5); // Garis-garis gas
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 20, 0, Math.PI * 2);
+                    ctx.fill(); // Kawah/daratan
+                }
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Susun Planet
+        const radiusOrbit = 28; // Seberapa lebar lingkarannya
+        planetNames.forEach((name, index) => {
+            const data = planetData[name];
+            const isSun = name === "Matahari";
+            
+            // Sphere UHD (Segmen banyak = mulus)
+            const geometry = new THREE.SphereGeometry(data.size, 64, 64);
+            
+            let material;
+            if (isSun) {
+                material = new THREE.MeshBasicMaterial({ 
+                    color: data.color, 
+                    map: createNoiseTexture(data.color, true)
+                });
+            } else {
+                material = new THREE.MeshStandardMaterial({ 
+                    color: data.color,
+                    roughness: 0.6,
+                    metalness: 0.1,
+                    map: createNoiseTexture(data.color, name === "Jupiter" || name === "Saturnus")
+                });
+            }
+
+            const planetMesh = new THREE.Mesh(geometry, material);
+            planetMesh.userData = { name: name }; // Simpan data buat diklik
+
+            // Jika Saturnus/Uranus, tambahkan cincin
+            if (data.hasRing) {
+                const ringGeo = new THREE.RingGeometry(data.size * 1.4, data.size * 2.2, 64);
+                const ringMat = new THREE.MeshStandardMaterial({ 
+                    color: 0xaaaaaa, side: THREE.DoubleSide, transparent: true, opacity: 0.7 
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2 + 0.2;
+                planetMesh.add(ring);
+            }
+
+            // Posisi melingkar (Carousel)
+            const angle = (index / planetNames.length) * Math.PI * 2;
+            planetMesh.position.x = Math.cos(angle) * radiusOrbit;
+            planetMesh.position.z = Math.sin(angle) * radiusOrbit;
+
+            solarSystemGroup.add(planetMesh);
+            planets.push({ mesh: planetMesh, angle: angle, name: name });
+            planetMeshes.push(planetMesh);
+        });
+
+        // ==========================================
+        // SISTEM PELACAKAN TANGAN (Kamera -> Layar)
+        // ==========================================
+        const videoElement = document.getElementById('video-feed');
+        const cursor = document.getElementById('hand-cursor');
+        const loadingScreen = document.getElementById('loading');
+        
+        // Raycaster untuk mendeteksi klik 3D
+        const raycaster = new THREE.Raycaster();
+        const mouseNDC = new THREE.Vector2(); // Kordinat untuk raycaster (-1 sampai 1)
+
+        let targetRotationY = 0; // Target putaran tata surya
+        let currentRotationY = 0; // Putaran saat ini (untuk animasi smooth)
+        
+        let cursorX = window.innerWidth / 2;
+        let cursorY = window.innerHeight / 2;
+        let isPinching = false;
+        let canClick = true; // Biar nggak ngeklik berkali-kali nahan cubit
+        
+        let activePlanet = null; // Menyimpan planet yang sedang dilihat penjelasannya
+
+        // Inisialisasi MediaPipe Hands
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1, // Fokus 1 tangan aja biar gak bingung
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults((results) => {
+            // Sembunyikan loading kalau udah jalan
+            if (loadingScreen.style.display !== 'none') {
+                loadingScreen.style.opacity = 0;
+                setTimeout(() => loadingScreen.style.display = 'none', 500);
+                cursor.style.display = 'block';
+            }
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Ambil posisi ujung telunjuk (titik 8) dan ujung jempol (titik 4)
+                const indexFinger = landmarks[8];
+                const thumb = landmarks[4];
+
+                // Hitung posisi kursor di layar (kamera itu mirror, jadi 1 - x)
+                cursorX = (1 - indexFinger.x) * window.innerWidth;
+                cursorY = indexFinger.y * window.innerHeight;
+
+                // Hitung jarak jempol dan telunjuk untuk "cubitan"
+                const dx = indexFinger.x - thumb.x;
+                const dy = indexFinger.y - thumb.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+
+                // Update posisi visual kursor
+                cursor.style.left = cursorX + 'px';
+                cursor.style.top = cursorY + 'px';
+
+                // Logika Cubit (Pinch)
+                if (distance < 0.05) { // Jarak dekat = dicubit
+                    if (!isPinching) {
+                        isPinching = true;
+                        cursor.classList.add('pinching');
+                        
+                        // Eksekusi fungsi klik pas baru nyubit
+                        if(canClick) {
+                            handlePinchClick();
+                            canClick = false; 
+                        }
+                    }
+                } else {
+                    isPinching = false;
+                    cursor.classList.remove('pinching');
+                    canClick = true; // Reset supaya bisa cubit lagi
+                }
+
+                // Logika Menggeser Tata Surya (Slide)
+                // Kalau lagi gak liat detail planet, posisi tangan X nentuin putaran
+                if (!activePlanet) {
+                    // Mapping tangan (X: 0.2 sampe 0.8) jadi putaran rotasi penuh
+                    let normalizedX = (1 - indexFinger.x); // 0 kiri layar, 1 kanan layar
+                    // Bikin pergerakan rotasi dinamis tergantung posisi tangan
+                    targetRotationY = (normalizedX - 0.5) * Math.PI * 3; 
+                }
+
+            } else {
+                // Tangan nggak keliatan
+                cursor.style.display = 'none';
+            }
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        camera.start().catch(err => {
+            alert("Gagal akses kamera! Pastikan kamu ngasih izin akses kamera ke browser ya.");
+        });
+
+        // ==========================================
+        // INTERAKSI: KLIK & UI
+        // ==========================================
+        const infoPanel = document.getElementById('info-panel');
+        const infoTitle = document.getElementById('info-title');
+        const infoSubtitle = document.getElementById('info-subtitle');
+        const infoDesc = document.getElementById('info-desc');
+        const hintText = document.getElementById('hint-text');
+
+        function handlePinchClick() {
+            // Kalau UI lagi kebuka, cubitan apa pun akan tutup UI-nya
+            if (activePlanet) {
+                closeInfoPanel();
+                return;
+            }
+
+            // Hitung NDC raycaster dari posisi tangan
+            mouseNDC.x = (cursorX / window.innerWidth) * 2 - 1;
+            mouseNDC.y = -(cursorY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouseNDC, camera3D);
+            const intersects = raycaster.intersectObjects(planetMeshes);
+
+            if (intersects.length > 0) {
+                const clickedMesh = intersects[0].object;
+                openInfoPanel(clickedMesh.userData.name);
+            }
+        }
+
+        function openInfoPanel(planetName) {
+            activePlanet = planetName;
+            const data = planetData[planetName];
+            
+            // Update teks HTML
+            infoTitle.innerText = planetName;
+            infoSubtitle.innerText = data.subtitle;
+            infoDesc.innerText = data.desc;
+            
+            infoPanel.classList.add('active');
+            hintText.style.display = 'none';
+
+            // Animasi kamera 3D fokus ke planet terkait
+            // Cari data posisinya
+            const planetObj = planets.find(p => p.name === planetName);
+            
+            // Kita atur target rotasi Y tata surya supaya planet ini ada persis di depan
+            // Sudut ke depan kamera adalah -Math.PI/2 (tergantung setup)
+            targetRotationY = -planetObj.angle + (Math.PI / 2);
+        }
+
+        function closeInfoPanel() {
+            activePlanet = null;
+            infoPanel.classList.remove('active');
+            setTimeout(() => hintText.style.display = 'block', 500);
+        }
+
+        // ==========================================
+        // ANIMATION LOOP (RENDERER)
+        // ==========================================
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            // Rotasi masing-masing planet pada porosnya
+            planetMeshes.forEach(mesh => {
+                mesh.rotation.y += 0.5 * delta;
+            });
+
+            // Rotasi background bintang biar berasa melayang pelan
+            starMesh.rotation.y += 0.02 * delta;
+
+            // Interpolasi (Smooth lerp) untuk putaran utama tata surya (carousel)
+            currentRotationY = THREE.MathUtils.lerp(currentRotationY, targetRotationY, 0.05);
+            solarSystemGroup.rotation.y = currentRotationY;
+
+            // Kalau lagi buka panel, kameranya maju dikit biar dramatis
+            const targetCamZ = activePlanet ? 45 : 60;
+            camera3D.position.z = THREE.MathUtils.lerp(camera3D.position.z, targetCamZ, 0.05);
+
+            // Bikin efek melayang dikit (Hover) kalau cursor ada di atas planet
+            if (!activePlanet && cursor.style.display !== 'none') {
+                mouseNDC.x = (cursorX / window.innerWidth) * 2 - 1;
+                mouseNDC.y = -(cursorY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouseNDC, camera3D);
+                const intersects = raycaster.intersectObjects(planetMeshes);
+                
+                // Reset skala semua
+                planetMeshes.forEach(mesh => {
+                    mesh.scale.lerp(new THREE.Vector3(1,1,1), 0.1);
+                });
+
+                // Besarkan sedikit planet yang kena hover tangan
+                if (intersects.length > 0) {
+                    cursor.style.transform = 'translate(-50%, -50%) scale(1.5)';
+                    cursor.style.background = 'rgba(255, 255, 255, 0.9)';
+                    intersects[0].object.scale.lerp(new THREE.Vector3(1.1, 1.1, 1.1), 0.2);
+                } else {
+                    cursor.style.transform = 'translate(-50%, -50%) scale(1)';
+                    if(!isPinching) cursor.style.background = 'rgba(0, 229, 255, 0.8)';
+                }
+            }
+
+            renderer.render(scene, camera3D);
+        }
+        animate();
+
+        // Responsive jika jendela browser diresize
+        window.addEventListener('resize', () => {
+            camera3D.aspect = window.innerWidth / window.innerHeight;
+            camera3D.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
